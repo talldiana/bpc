@@ -1,0 +1,3 @@
+# Local settings for `npm run dev`. Copy to .dev.vars (not committed).
+# Prints outgoing mails to the terminal while no mail provider is set.
+ENVIRONMENT=development
