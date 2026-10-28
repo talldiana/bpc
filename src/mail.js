@@ -1,5 +1,7 @@
-// Outgoing e-mail. Until the team picks a provider, mails are only logged in
-// development; set RESEND_API_KEY and MAIL_FROM (wrangler secrets) to send them.
+// Outgoing e-mail. Set RESEND_API_KEY and MAIL_FROM (wrangler secrets) to send
+// mails. Without them, mails are only printed when ENVIRONMENT=development
+// (.dev.vars, read by `wrangler dev`); anywhere else sending fails, so one-time
+// links never end up in the production logs.
 
 export function createMailer(env) {
   if (env.RESEND_API_KEY && env.MAIL_FROM) {
@@ -14,10 +16,17 @@ export function createMailer(env) {
       },
     };
   }
+  if (env.ENVIRONMENT === 'development') {
+    return {
+      // Prints the mail body (with the link) but not the address.
+      async send({ subject, text }) {
+        console.log(`[mail not sent, no provider configured] ${subject}\n${text}`);
+      },
+    };
+  }
   return {
-    // Development only: prints the mail body (with the link) but not the address.
-    async send({ subject, text }) {
-      console.log(`[mail not sent, no provider configured] ${subject}\n${text}`);
+    async send() {
+      throw new Error('No mail provider configured (RESEND_API_KEY, MAIL_FROM)');
     },
   };
 }

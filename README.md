@@ -58,7 +58,8 @@ SCRUM-15: users who forgot their password open `/reset-password.html`, enter the
 - `POST /api/password-reset` `{ "email" }` always answers 202, so it does not reveal which addresses have an account. At most 3 links per user per hour.
 - `POST /api/password-reset/confirm` `{ "token", "password" }` answers 204, or 400 with `INVALID_LINK`, `PASSWORD_TOO_SHORT` or `PASSWORD_TOO_LONG`.
 - Apply the new table with `npx wrangler d1 migrations apply bpc --remote` (or `npm run setup -- --remote`).
-- E-mails are only logged until a provider is set: `npx wrangler secret put RESEND_API_KEY` and `npx wrangler secret put MAIL_FROM`.
+- Set the mail provider with `npx wrangler secret put RESEND_API_KEY` and `npx wrangler secret put MAIL_FROM`. Without them no mail is sent, and the failure is logged without the link.
+- For local development without a provider, `cp .dev.vars.example .dev.vars`: with `ENVIRONMENT=development`, `npm run dev` prints the mails, including the link, to the terminal.
 
 ## BMF feed (FR-DOC-06)
 
