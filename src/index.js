@@ -2,6 +2,7 @@
 // static assets from public/; requests to /api/* run this code first, so the
 // web app and the API share one domain.
 
+import { refreshBmfFeed } from './bmf-feed.js';
 import { createMailer } from './mail.js';
 import { confirmPasswordReset, languageOf, requestPasswordReset } from './password-reset.js';
 
@@ -55,5 +56,13 @@ export default {
     if (request.method === 'POST' && pathname === '/api/password-reset/confirm') return passwordResetConfirm(request, env);
     if (pathname.startsWith('/api/')) return json({ error: 'Not found' }, 404);
     return env.ASSETS.fetch(request);
+  },
+
+  // SCRUM-18 / FR-DOC-06: run once a day by the cron trigger in wrangler.toml.
+  // It only refreshes the BMF copy and never starts a partner check (FR-CHK-09).
+  async scheduled(controller, env) {
+    const result = await refreshBmfFeed(env);
+    const log = result.status === 'OK' ? console.log : console.error;
+    log(`BMF feed fetch ${result.status}: ${JSON.stringify(result)}`);
   },
 };

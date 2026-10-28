@@ -60,6 +60,26 @@ SCRUM-15: users who forgot their password open `/reset-password.html`, enter the
 - Apply the new table with `npx wrangler d1 migrations apply bpc --remote` (or `npm run setup -- --remote`).
 - E-mails are only logged until a provider is set: `npx wrangler secret put RESEND_API_KEY` and `npx wrangler secret put MAIL_FROM`.
 
+## BMF feed (FR-DOC-06)
+
+Once a day at 04:17 UTC (05:17 Vienna time in winter) a Cron Trigger runs the Worker's `scheduled` handler, which fetches the BMF fake company feed (SCRUM-18, `src/bmf-feed.js`).
+
+- Every run adds a row to `bmf_feed_fetches` with the fetch time (UTC) and the feed's own publication date. BMF publishes dates without a time of day, so the publication time is a date, e.g. `2026-10-27`.
+- A successful run replaces the copy in `bmf_feed_entries`. Only name, VAT number, FN and publication date are kept for each entry (CMP-01).
+- A failed run (no answer within 30 s, an HTTP error, or a broken, empty or incomplete feed) is logged with its error, and the last good copy stays in use.
+- Every run is also written to `audit_log` as `BMF_FEED_FETCH`. The job never starts a partner check (FR-CHK-09).
+
+The feed URL defaults to `https://service.bmf.gv.at/service/allg/lsu/rss_lsu.asp` and can be overridden with the `BMF_FEED_URL` variable, for example to point at a mock.
+
+Run the job locally without waiting for the schedule:
+
+```sh
+npx wrangler d1 migrations apply bpc --local   # creates the new tables
+npm run dev
+# in a browser: http://localhost:8787/cdn-cgi/local/scheduled
+npx wrangler d1 execute bpc --local --command "SELECT * FROM bmf_feed_fetches"
+```
+
 ## Availability
 
 QS-AVL-01: the service is available as far as the hosting provider guarantees.
