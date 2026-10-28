@@ -28,9 +28,10 @@ const FACTORIES = {
 };
 
 // Builds the adapter for every source. `overrides` replaces single sources,
-// e.g. { VIES: mockAdapter }, and leaves the others as they are.
-export function createAdapters(env, overrides = {}) {
-  return SOURCES.map((source) => overrides[source] ?? FACTORIES[source](env));
+// e.g. { VIES: mockAdapter }, and leaves the others as they are. `options`
+// (e.g. { fetch }) is passed to every adapter.
+export function createAdapters(env, overrides = {}, options = {}) {
+  return SOURCES.map((source) => overrides[source] ?? FACTORIES[source](env, options));
 }
 
 function unavailable(reason) {

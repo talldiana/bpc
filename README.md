@@ -80,6 +80,21 @@ npm run dev
 npx wrangler d1 execute bpc --local --command "SELECT * FROM bmf_feed_fetches"
 ```
 
+## VIES check and proof of concept
+
+The VIES adapter (SCRUM-66, `src/adapters/vies.js`) checks VAT numbers of every EU member state through the European Commission's VIES REST service.
+
+- A valid number is `VALID` with the registered name and address; an invalid one is `INVALID`.
+- A number without an EU prefix is `INVALID` without calling VIES. If VIES or a member state's service is down, the result is `UNAVAILABLE`.
+- `VIES_URL` overrides the endpoint, for example with the VIES test service, where `100` is a valid and `200` an invalid number.
+
+The Sprint 1 proof of concept (DI-07, SCRUM-25) runs one check through all adapters and reads the live BMF feed:
+
+```sh
+npm run poc -- ATU12345678      # real VIES
+npm run poc -- AT100 --test     # VIES test service
+```
+
 ## Availability
 
 QS-AVL-01: the service is available as far as the hosting provider guarantees.
