@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BizPartnerCheck – Register</title>
+</head>
+<body>
+  <!-- SCRUM-12 (FR-ORG-01): free registration of an organisation and its first
+       Organisation Admin. No payment data is asked for. -->
+  <h1 id="title"></h1>
+  <p id="intro"></p>
+
+  <form id="register-form" novalidate>
+    <fieldset>
+      <legend id="organisation-legend"></legend>
+      <label><span id="organisationName-label"></span><br><input name="organisationName" required maxlength="200" autocomplete="organization"></label>
+      <small data-error-for="organisationName"></small><br>
+      <label><span id="organisationNumber-label"></span><br><input name="organisationNumber" required placeholder="FN 123456a"></label>
+      <small data-error-for="organisationNumber"></small>
+    </fieldset>
+    <fieldset>
+      <legend id="admin-legend"></legend>
+      <label><span id="firstName-label"></span><br><input name="firstName" required maxlength="200" autocomplete="given-name"></label>
+      <small data-error-for="firstName"></small><br>
+      <label><span id="lastName-label"></span><br><input name="lastName" required maxlength="200" autocomplete="family-name"></label>
+      <small data-error-for="lastName"></small><br>
+      <label><span id="email-label"></span><br><input type="email" name="email" required autocomplete="email"></label>
+      <small data-error-for="email"></small>
+    </fieldset>
+    <p><button type="submit" id="register-button"></button></p>
+  </form>
+
+  <p id="message" role="status"></p>
+
+  <script>
+    const texts = {
+      en: {
+        title: 'Register your organisation',
+        intro: 'Registration is free. All fields are required.',
+        organisation: 'Organisation',
+        organisationName: 'Organisation name',
+        organisationNumber: 'Company register number (Firmenbuchnummer)',
+        admin: 'First Organisation Admin',
+        firstName: 'First name',
+        lastName: 'Last name',
+        email: 'E-mail address',
+        register: 'Register',
+        REQUIRED: 'Please fill in this field.',
+        TOO_LONG: 'This is too long (at most 200 characters).',
+        INVALID_organisationNumber: 'Please enter a company register number like FN 123456a.',
+        INVALID_email: 'Please enter a valid e-mail address.',
+        ORGANISATION_EXISTS: 'An organisation with this company register number is already registered.',
+        EMAIL_IN_USE: 'This e-mail address is already used by another account.',
+        done: 'Your organisation is registered. Next, confirm your e-mail address to activate your account.',
+        failed: 'Something went wrong. Please try again.',
+      },
+      de: {
+        title: 'Organisation registrieren',
+        intro: 'Die Registrierung ist kostenlos. Alle Felder sind Pflichtfelder.',
+        organisation: 'Organisation',
+        organisationName: 'Name der Organisation',
+        organisationNumber: 'Firmenbuchnummer',
+        admin: 'Erste:r Organisations-Admin',
+        firstName: 'Vorname',
+        lastName: 'Nachname',
+        email: 'E-Mail-Adresse',
+        register: 'Registrieren',
+        REQUIRED: 'Bitte füllen Sie dieses Feld aus.',
+        TOO_LONG: 'Das ist zu lang (höchstens 200 Zeichen).',
+        INVALID_organisationNumber: 'Bitte geben Sie eine Firmenbuchnummer wie FN 123456a ein.',
+        INVALID_email: 'Bitte geben Sie eine gültige E-Mail-Adresse ein.',
+        ORGANISATION_EXISTS: 'Eine Organisation mit dieser Firmenbuchnummer ist bereits registriert.',
+        EMAIL_IN_USE: 'Diese E-Mail-Adresse wird bereits von einem anderen Konto verwendet.',
+        done: 'Ihre Organisation ist registriert. Bestätigen Sie als Nächstes Ihre E-Mail-Adresse, um Ihr Konto zu aktivieren.',
+        failed: 'Etwas ist schiefgegangen. Bitte versuchen Sie es erneut.',
+      },
+    };
+    const lang = navigator.language.toLowerCase().startsWith('de') ? 'de' : 'en';
+    const t = texts[lang];
+    document.documentElement.lang = lang;
+    document.title = `BizPartnerCheck – ${t.title}`;
+    for (const [id, key] of [['title', 'title'], ['intro', 'intro'], ['organisation-legend', 'organisation'],
+      ['admin-legend', 'admin'], ['register-button', 'register'],
+      ...['organisationName', 'organisationNumber', 'firstName', 'lastName', 'email'].map((name) => [`${name}-label`, name])]) {
+      document.getElementById(id).textContent = t[key];
+    }
+
+    const form = document.getElementById('register-form');
+    const message = document.getElementById('message');
+    const showFieldErrors = (fields = {}) => {
+      for (const slot of document.querySelectorAll('[data-error-for]')) {
+        const code = fields[slot.dataset.errorFor];
+        slot.textContent = code ? (t[`${code}_${slot.dataset.errorFor}`] ?? t[code]) : '';
+      }
+    };
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      message.textContent = '';
+      showFieldErrors();
+      const body = Object.fromEntries(new FormData(form));
+      const response = await fetch('/api/organisations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }).catch(() => null);
+      if (response?.status === 201) {
+        form.hidden = true;
+        message.textContent = t.done;
+        return;
+      }
+      const result = await response?.json().catch(() => ({}));
+      if (result?.fields) showFieldErrors(result.fields);
+      else message.textContent = t[result?.error] ?? t.failed;
+    });
+  </script>
+</body>
+</html>

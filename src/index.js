@@ -5,6 +5,7 @@
 import { refreshBmfFeed } from './bmf-feed.js';
 import { createMailer } from './mail.js';
 import { confirmPasswordReset, languageOf, requestPasswordReset } from './password-reset.js';
+import { registerOrganisation } from './registration.js';
 
 function json(body, status = 200) {
   return Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -48,12 +49,21 @@ async function passwordResetConfirm(request, env) {
   return result.ok ? new Response(null, { status: 204 }) : json({ error: result.error }, 400);
 }
 
+// SCRUM-12
+async function register(request, env) {
+  const result = await registerOrganisation({ db: env.DB }, await readJson(request), languageOf(request));
+  if (result.ok) return json({ organisationId: result.organisationId }, 201);
+  if (result.error === 'INVALID_INPUT') return json({ error: result.error, fields: result.fields }, 400);
+  return json({ error: result.error }, 409);
+}
+
 export default {
   async fetch(request, env, ctx) {
     const { pathname } = new URL(request.url);
     if (pathname === '/api/health') return health(env);
     if (request.method === 'POST' && pathname === '/api/password-reset') return passwordReset(request, env, ctx);
     if (request.method === 'POST' && pathname === '/api/password-reset/confirm') return passwordResetConfirm(request, env);
+    if (request.method === 'POST' && pathname === '/api/organisations') return register(request, env);
     if (pathname.startsWith('/api/')) return json({ error: 'Not found' }, 404);
     return env.ASSETS.fetch(request);
   },

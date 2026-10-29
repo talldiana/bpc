@@ -51,6 +51,14 @@ First deployment on a new Cloudflare account:
 2. `SUPER_ADMIN_EMAIL=... npm run setup -- --remote` to create the schema and the Super Admin.
 3. `npm run deploy`. Wrangler creates the custom domain and its TLS certificate. The zone (`hsynrsd.dev`) must be on the same Cloudflare account.
 
+## Organisation registration
+
+SCRUM-12 (FR-ORG-01): a new organisation registers for free on `/register` with its name, its company register number (Firmenbuchnummer) and the first name, last name and e-mail address of its first Organisation Admin.
+
+- `POST /api/organisations` `{ "organisationName", "organisationNumber", "firstName", "lastName", "email" }` answers 201 `{ "organisationId" }`, 400 `INVALID_INPUT` with an error code per field, or 409 `ORGANISATION_EXISTS` / `EMAIL_IN_USE`.
+- The number is accepted as `FN 123456a`, `123456a` or `fn 123456 A` and stored as `FN 123456a`.
+- The admin is created as `ADMIN` with status `PENDING`. Login and e-mail verification go through the identity provider (Clerk): once it confirms the address, `linkExternalUser()` in `src/registration.js` stores the provider's user id in `users.external_user_id` and sets the account to `ACTIVE`.
+
 ## Password reset
 
 SCRUM-15: users who forgot their password open `/reset-password.html`, enter their e-mail address and get a link that works once for 30 minutes.
