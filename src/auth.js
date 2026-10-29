@@ -18,7 +18,10 @@ export function clerkIdentity(env) {
     async authenticate(request) {
       const state = await clerk.authenticateRequest(request, { authorizedParties: [new URL(request.url).origin] });
       if (state.status === 'handshake') return { handshake: state.headers };
-      return state.isAuthenticated ? { externalUserId: state.toAuth().userId } : null;
+      if (state.isAuthenticated) return { externalUserId: state.toAuth().userId };
+      // Why Clerk did not accept the session (e.g. token expired, wrong origin); no secrets.
+      if (state.reason) console.log(`Clerk: not signed in (${state.reason}${state.message ? `: ${state.message}` : ''})`);
+      return null;
     },
     // The user's primary e-mail address, only if Clerk has verified it.
     async verifiedEmail(externalUserId) {
