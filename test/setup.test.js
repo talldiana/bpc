@@ -5,7 +5,6 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
-import { hashPassword, verifyPassword } from '../src/password.js';
 import { SELECT_SUPER_ADMIN_SQL, insertSuperAdminSql, validateEmail } from '../scripts/setup-lib.js';
 
 const schema = readFileSync(new URL('../migrations/0001_initial_schema.sql', import.meta.url), 'utf8');
@@ -27,17 +26,15 @@ test('schema creates all tables on an empty database', () => {
 
 test('setup creates exactly one Super Admin, and a second run creates none', async () => {
   const db = emptyDatabaseWithSchema();
-  db.exec(insertSuperAdminSql({ email: 'ops@example.com', passwordHash: await hashPassword('first-password-123') }));
-  db.exec(insertSuperAdminSql({ email: 'other@example.com', passwordHash: await hashPassword('second-password-123') }));
+  db.exec(insertSuperAdminSql({ email: 'ops@example.com' }));
+  db.exec(insertSuperAdminSql({ email: 'other@example.com' }));
 
   const admins = db.prepare(SELECT_SUPER_ADMIN_SQL).all();
   assert.deepEqual(admins.map((row) => row.email), ['ops@example.com']);
 
   const admin = db.prepare("SELECT * FROM users WHERE role = 'SUPER_ADMIN'").get();
   assert.equal(admin.organisation_id, null);
-  assert.equal(admin.must_change_password, 1);
   assert.equal(admin.status, 'ACTIVE');
-  assert.ok(await verifyPassword('first-password-123', admin.password_hash));
 });
 
 test('database refuses a second Super Admin even without the setup guard', () => {
@@ -57,15 +54,11 @@ test('organisation users need an organisation, the Super Admin must not have one
 
 test('e-mail input is quoted safely', async () => {
   const db = emptyDatabaseWithSchema();
-  db.exec(insertSuperAdminSql({ email: "o'brien@example.com", passwordHash: await hashPassword('password-123456') }));
+  db.exec(insertSuperAdminSql({ email: "o'brien@example.com" }));
   assert.equal(db.prepare(SELECT_SUPER_ADMIN_SQL).get().email, "o'brien@example.com");
 });
 
 test('invalid e-mail is rejected', () => {
   assert.throws(() => validateEmail(undefined), /SUPER_ADMIN_EMAIL/);
   assert.throws(() => validateEmail('not-an-email'), /SUPER_ADMIN_EMAIL/);
-});
-
-test('wrong password does not verify', async () => {
-  assert.equal(await verifyPassword('wrong', await hashPassword('right-password-123')), false);
 });

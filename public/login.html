@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BizPartnerCheck – Log in</title>
+  <script src="/clerk.js"></script>
+</head>
+<body>
+  <!-- SCRUM-104 / SCRUM-14: sign-in through Clerk (SI-06). Clerk shows the e-mail and password
+       form and handles "Forgot password?". After sign-in the app opens under /app/. -->
+  <h1 id="title"></h1>
+  <div id="sign-in"></div>
+  <p id="message" role="alert"></p>
+
+  <script>
+    const texts = {
+      en: { title: 'Log in', failed: 'The login could not be loaded. Please try again later.' },
+      de: { title: 'Anmelden', failed: 'Die Anmeldung konnte nicht geladen werden. Bitte versuchen Sie es später erneut.' },
+    };
+    const lang = navigator.language.toLowerCase().startsWith('de') ? 'de' : 'en';
+    const t = texts[lang];
+    document.documentElement.lang = lang;
+    document.title = `BizPartnerCheck – ${t.title}`;
+    document.getElementById('title').textContent = t.title;
+
+    loadClerk()
+      .then((clerk) => {
+        if (clerk.isSignedIn) return location.replace('/app/');
+        clerk.mountSignIn(document.getElementById('sign-in'), { signUpUrl: '/register', forceRedirectUrl: '/app/' });
+      })
+      .catch(() => { document.getElementById('message').textContent = t.failed; });
+  </script>
+</body>
+</html>

@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>BizPartnerCheck – Register</title>
+  <script src="/clerk.js"></script>
 </head>
 <body>
   <!-- SCRUM-12 (FR-ORG-01): free registration of an organisation and its first
@@ -32,6 +33,9 @@
   </form>
 
   <p id="message" role="status"></p>
+  <!-- SCRUM-104: after registering, the admin creates the Clerk account with the same
+       e-mail address; Clerk sends the verification link (FR-ORG-02). -->
+  <div id="sign-up"></div>
 
   <script>
     const texts = {
@@ -52,7 +56,7 @@
         INVALID_email: 'Please enter a valid e-mail address.',
         ORGANISATION_EXISTS: 'An organisation with this company register number is already registered.',
         EMAIL_IN_USE: 'This e-mail address is already used by another account.',
-        done: 'Your organisation is registered. Next, confirm your e-mail address to activate your account.',
+        done: 'Your organisation is registered. Now choose a password. We will then send you an e-mail with a link to confirm your address.',
         failed: 'Something went wrong. Please try again.',
       },
       de: {
@@ -72,7 +76,7 @@
         INVALID_email: 'Bitte geben Sie eine gültige E-Mail-Adresse ein.',
         ORGANISATION_EXISTS: 'Eine Organisation mit dieser Firmenbuchnummer ist bereits registriert.',
         EMAIL_IN_USE: 'Diese E-Mail-Adresse wird bereits von einem anderen Konto verwendet.',
-        done: 'Ihre Organisation ist registriert. Bestätigen Sie als Nächstes Ihre E-Mail-Adresse, um Ihr Konto zu aktivieren.',
+        done: 'Ihre Organisation ist registriert. Wählen Sie jetzt ein Passwort. Danach senden wir Ihnen eine E-Mail mit einem Link, um Ihre Adresse zu bestätigen.',
         failed: 'Etwas ist schiefgegangen. Bitte versuchen Sie es erneut.',
       },
     };
@@ -108,6 +112,16 @@
       if (response?.status === 201) {
         form.hidden = true;
         message.textContent = t.done;
+        const clerk = await loadClerk().catch(() => null);
+        if (!clerk) {
+          message.textContent = t.failed;
+          return;
+        }
+        clerk.mountSignUp(document.getElementById('sign-up'), {
+          initialValues: { emailAddress: body.email },
+          signInUrl: '/login',
+          forceRedirectUrl: '/app/',
+        });
         return;
       }
       const result = await response?.json().catch(() => ({}));

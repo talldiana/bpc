@@ -2,9 +2,9 @@
 // static assets from public/; requests to /api/* run this code first, so the
 // web app and the API share one domain.
 
+import { clerkIdentity, currentUser } from './auth.js';
 import { refreshBmfFeed } from './bmf-feed.js';
-import { createMailer } from './mail.js';
-import { confirmPasswordReset, languageOf, requestPasswordReset } from './password-reset.js';
+import { languageOf } from './language.js';
 import { registerOrganisation } from './registration.js';
 
 function json(body, status = 200) {
@@ -28,27 +28,6 @@ async function health(env) {
   }
 }
 
-// SCRUM-15
-async function passwordReset(request, env, ctx) {
-  const { email } = await readJson(request);
-  if (typeof email !== 'string' || !email.includes('@')) return json({ error: 'INVALID_EMAIL' }, 400);
-
-  const deps = { db: env.DB, mailer: createMailer(env), baseUrl: new URL(request.url).origin };
-  // Work after answering, so known and unknown addresses take the same time.
-  ctx.waitUntil(
-    requestPasswordReset(deps, email, languageOf(request)).catch((error) =>
-      console.error('Password reset request failed', error.message), // no e-mail address in logs
-    ),
-  );
-  return json({ status: 'If an active account uses this address, a reset link has been sent.' }, 202);
-}
-
-async function passwordResetConfirm(request, env) {
-  const { token, password } = await readJson(request);
-  const result = await confirmPasswordReset({ db: env.DB }, token, password);
-  return result.ok ? new Response(null, { status: 204 }) : json({ error: result.error }, 400);
-}
-
 // SCRUM-12
 async function register(request, env) {
   const result = await registerOrganisation({ db: env.DB }, await readJson(request), languageOf(request));
@@ -57,14 +36,42 @@ async function register(request, env) {
   return json({ error: result.error }, 409);
 }
 
+// SCRUM-104: the Clerk key the browser needs. It is public by design.
+function config(env) {
+  return json({ clerkPublishableKey: env.CLERK_PUBLISHABLE_KEY ?? null });
+}
+
+// Tests pass env.IDENTITY instead of talking to Clerk.
+const identityOf = (env) => env.IDENTITY ?? clerkIdentity(env);
+
+async function me(request, env) {
+  const result = await currentUser({ db: env.DB, identity: identityOf(env) }, request);
+  if (result.user) return json({ user: result.user });
+  // 401: not signed in. 403: signed in at Clerk, but not a BizPartnerCheck user.
+  return json({ error: result.error ?? 'NOT_SIGNED_IN' }, result.error === 'NOT_REGISTERED' ? 403 : 401);
+}
+
+// Pages under /app/ are only for signed-in users; everyone else is sent to the
+// sign-in page. no-store keeps the browser from showing them again after logout.
+async function appPage(request, env) {
+  const result = await currentUser({ db: env.DB, identity: identityOf(env) }, request);
+  if (result.handshake) return new Response(null, { status: 307, headers: result.handshake });
+  if (!result.user) return Response.redirect(new URL('/login', request.url), 302);
+  const page = await env.ASSETS.fetch(request);
+  const response = new Response(page.body, page);
+  response.headers.set('Cache-Control', 'no-store');
+  return response;
+}
+
 export default {
   async fetch(request, env, ctx) {
     const { pathname } = new URL(request.url);
     if (pathname === '/api/health') return health(env);
-    if (request.method === 'POST' && pathname === '/api/password-reset') return passwordReset(request, env, ctx);
-    if (request.method === 'POST' && pathname === '/api/password-reset/confirm') return passwordResetConfirm(request, env);
     if (request.method === 'POST' && pathname === '/api/organisations') return register(request, env);
+    if (request.method === 'GET' && pathname === '/api/config') return config(env);
+    if (request.method === 'GET' && pathname === '/api/me') return me(request, env);
     if (pathname.startsWith('/api/')) return json({ error: 'Not found' }, 404);
+    if (pathname === '/app' || pathname.startsWith('/app/')) return appPage(request, env);
     return env.ASSETS.fetch(request);
   },
 

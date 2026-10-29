@@ -19,13 +19,12 @@ SUPER_ADMIN_EMAIL=ops@example.com npm run setup -- --remote
 | Variable | Required | Meaning |
 | --- | --- | --- |
 | `SUPER_ADMIN_EMAIL` | yes | E-mail address of the Super Admin |
-| `SUPER_ADMIN_PASSWORD` | no | Initial password, at least 12 characters. If unset, a random one is generated and printed once. |
 | `D1_DATABASE` | no | D1 database name, default `bpc` |
 
 What the script does:
 
 1. Applies all migrations in `migrations/` that have not run yet.
-2. Creates the Super Admin with a hashed password, marked so the password must be changed at first login (assumption for OI-08).
+2. Creates the Super Admin, without a password. The Super Admin then creates the Clerk account with the same e-mail address on `/signup`; the first sign-in links the two (see Login).
 
 Running it again is safe: already applied migrations are skipped, and if a Super Admin exists it prints its e-mail and creates nothing.
 The database also refuses a second Super Admin through a unique index.
@@ -49,7 +48,8 @@ First deployment on a new Cloudflare account:
 
 1. `npx wrangler d1 create bpc --location weur` and put the printed `database_id` in `wrangler.toml`.
 2. `SUPER_ADMIN_EMAIL=... npm run setup -- --remote` to create the schema and the Super Admin.
-3. `npm run deploy`. Wrangler creates the custom domain and its TLS certificate. The zone (`hsynrsd.dev`) must be on the same Cloudflare account.
+3. `npx wrangler secret put CLERK_SECRET_KEY` with the secret key of the Clerk instance (see Login).
+4. `npm run deploy`. Wrangler creates the custom domain and its TLS certificate. The zone (`hsynrsd.dev`) must be on the same Cloudflare account.
 
 ## Organisation registration
 
@@ -57,17 +57,21 @@ SCRUM-12 (FR-ORG-01): a new organisation registers for free on `/register` with 
 
 - `POST /api/organisations` `{ "organisationName", "organisationNumber", "firstName", "lastName", "email" }` answers 201 `{ "organisationId" }`, 400 `INVALID_INPUT` with an error code per field, or 409 `ORGANISATION_EXISTS` / `EMAIL_IN_USE`.
 - The number is accepted as `FN 123456a`, `123456a` or `fn 123456 A` and stored as `FN 123456a`.
-- The admin is created as `ADMIN` with status `PENDING`. Login and e-mail verification go through the identity provider (Clerk): once it confirms the address, `linkExternalUser()` in `src/registration.js` stores the provider's user id in `users.external_user_id` and sets the account to `ACTIVE`.
+- The admin is created as `ADMIN` with status `PENDING`. Right after registering, the page shows Clerk's sign-up with the same e-mail address; once Clerk has verified the address, the first sign-in activates the admin (see Login).
 
-## Password reset
+## Login (Clerk)
 
-SCRUM-15: users who forgot their password open `/reset-password.html`, enter their e-mail address and get a link that works once for 30 minutes.
+SCRUM-104 (SI-06, CR-09): the team does not implement authentication itself. Sign-in, sign-up, e-mail verification (with a link) and password reset are handled by **Clerk**; the database holds no passwords (QS-SEC-02).
 
-- `POST /api/password-reset` `{ "email" }` always answers 202, so it does not reveal which addresses have an account. At most 3 links per user per hour.
-- `POST /api/password-reset/confirm` `{ "token", "password" }` answers 204, or 400 with `INVALID_LINK`, `PASSWORD_TOO_SHORT` or `PASSWORD_TOO_LONG`.
-- Apply the new table with `npx wrangler d1 migrations apply bpc --remote` (or `npm run setup -- --remote`).
-- Set the mail provider with `npx wrangler secret put RESEND_API_KEY` and `npx wrangler secret put MAIL_FROM`. Without them no mail is sent, and the failure is logged without the link.
-- For local development without a provider, `cp .dev.vars.example .dev.vars`: with `ENVIRONMENT=development`, `npm run dev` prints the mails, including the link, to the terminal.
+**Why Clerk:** it runs with Cloudflare Workers (`@clerk/backend` verifies sessions in the Worker, the browser part loads from Clerk's CDN without a build step), its free plan is far more than enough for this project (50,000 monthly users), and it has ready-made sign-in and sign-up forms with e-mail verification and password reset. EU data location: not checked yet; see open points in the PR.
+
+How it fits together:
+
+- Pages: `/login` (Clerk sign-in), `/register` (organisation registration, then Clerk sign-up), `/signup` (Clerk sign-up for users that already exist here, e.g. the Super Admin), `/app/` (only for signed-in users).
+- The Worker checks the Clerk session on `/api/me` and on every page under `/app/`, and maps the Clerk user to our user, organisation and role (`src/auth.js`). Without a session `/app/` redirects to `/login`; `/api/me` answers 401, or 403 `NOT_REGISTERED` for a Clerk account that belongs to no user here.
+- First sign-in: when Clerk reports the user's primary e-mail address as verified, the user with that address is linked via `users.external_user_id` and set to `ACTIVE` (`linkExternalUser()` in `src/registration.js`). Deactivated users are never linked and lose access at once.
+- Keys: `CLERK_PUBLISHABLE_KEY` is public and set in `wrangler.toml`. `CLERK_SECRET_KEY` is a secret: `npx wrangler secret put CLERK_SECRET_KEY`, and locally in `.dev.vars` (see `.dev.vars.example`). Never commit it.
+- In the Clerk dashboard: sign-in with e-mail address and password only, e-mail verification by link.
 
 ## BMF feed (FR-DOC-06)
 

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BizPartnerCheck</title>
+  <script src="/clerk.js"></script>
+</head>
+<body>
+  <!-- SCRUM-14: first page after login. The Worker only serves /app/* to signed-in
+       users. The pages per role (check, list, users, tokens) come with SCRUM-32. -->
+  <h1>BizPartnerCheck</h1>
+  <p id="who"></p>
+  <button type="button" id="logout"></button>
+
+  <script>
+    const texts = {
+      en: {
+        who: (u, role) => `Logged in as ${u.firstName} ${u.lastName} (${role}).`,
+        notRegistered: 'This account does not belong to a registered organisation yet.',
+        logout: 'Log out',
+        roles: { SUPER_ADMIN: 'Super Admin', ADMIN: 'Organisation Admin', REQUEST_USER: 'Request User', REVIEW_USER: 'Review User' },
+      },
+      de: {
+        who: (u, role) => `Angemeldet als ${u.firstName} ${u.lastName} (${role}).`,
+        notRegistered: 'Dieses Konto gehört noch zu keiner registrierten Organisation.',
+        logout: 'Abmelden',
+        roles: { SUPER_ADMIN: 'Super-Admin', ADMIN: 'Organisations-Admin', REQUEST_USER: 'Anfrage-Benutzer', REVIEW_USER: 'Prüf-Benutzer' },
+      },
+    };
+    const lang = navigator.language.toLowerCase().startsWith('de') ? 'de' : 'en';
+    const t = texts[lang];
+    document.documentElement.lang = lang;
+    const logout = document.getElementById('logout');
+    logout.textContent = t.logout;
+    const who = document.getElementById('who');
+
+    fetch('/api/me').then(async (response) => {
+      if (response.status === 401) return location.replace('/login');
+      const body = await response.json();
+      who.textContent = body.user ? t.who(body.user, t.roles[body.user.role] ?? body.user.role) : t.notRegistered;
+    });
+
+    const clerkReady = loadClerk();
+    logout.addEventListener('click', async () => {
+      const clerk = await clerkReady;
+      await clerk.signOut({ redirectUrl: '/login' });
+    });
+  </script>
+</body>
+</html>

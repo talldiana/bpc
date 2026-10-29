@@ -1,3 +1,3 @@
 # Local settings for `npm run dev`. Copy to .dev.vars (not committed).
-# Prints outgoing mails to the terminal while no mail provider is set.
-ENVIRONMENT=development
+# Clerk secret key from the Clerk dashboard (API keys). Never commit it.
+CLERK_SECRET_KEY=sk_test_...

@@ -51,7 +51,6 @@ test('registering creates the organisation and its first admin as PENDING', asyn
   assert.equal(user.last_name, 'Berger');
   assert.equal(user.role, 'ADMIN');
   assert.equal(user.status, 'PENDING');
-  assert.equal(user.password_hash, null);
   assert.equal(user.external_user_id, null);
 });
 

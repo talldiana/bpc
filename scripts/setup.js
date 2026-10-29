@@ -6,14 +6,7 @@
 //   SUPER_ADMIN_EMAIL=ops@example.com npm run setup -- --remote # Cloudflare D1
 
 import { execFileSync } from 'node:child_process';
-import { hashPassword } from '../src/password.js';
-import {
-  SELECT_SUPER_ADMIN_SQL,
-  generatePassword,
-  insertSuperAdminSql,
-  validateEmail,
-  validatePassword,
-} from './setup-lib.js';
+import { SELECT_SUPER_ADMIN_SQL, insertSuperAdminSql, validateEmail } from './setup-lib.js';
 
 const DATABASE = process.env.D1_DATABASE ?? 'bpc';
 const target = process.argv.includes('--remote') ? '--remote' : '--local';
@@ -44,15 +37,9 @@ async function main() {
     return;
   }
 
-  const generated = !process.env.SUPER_ADMIN_PASSWORD;
-  const password = process.env.SUPER_ADMIN_PASSWORD ?? generatePassword();
-  validatePassword(password);
-
-  query(insertSuperAdminSql({ email, passwordHash: await hashPassword(password) }));
-  console.log(`Created Super Admin ${email}. The password must be changed at first login.`);
-  if (generated) {
-    console.log(`Initial password (shown only once): ${password}`);
-  }
+  query(insertSuperAdminSql({ email }));
+  console.log(`Created Super Admin ${email}.`);
+  console.log('Next: create the account with this e-mail address on /signup. The first sign-in links it (SCRUM-104).');
 }
 
 main().catch((error) => {

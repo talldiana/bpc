@@ -101,16 +101,17 @@ export async function registerOrganisation({ db, now = new Date() }, input, lang
 /**
  * For the identity provider integration (FR-ORG-02): call this once the
  * provider has confirmed that someone owns this e-mail address. It links the
- * PENDING user with that address to the provider's user id and makes the
- * account ACTIVE. Returns { id, organisation_id, role } of the activated user,
- * or null if there is no PENDING user with that address.
+ * user with that address, if not linked yet, to the provider's user id and
+ * makes the account ACTIVE. This covers a PENDING admin after registration and
+ * the Super Admin from the setup script. Returns { id, organisation_id, role },
+ * or null if there is no such user (DEACTIVATED users are never linked).
  */
 export async function linkExternalUser({ db, now = new Date() }, { email, externalUserId }) {
   if (typeof email !== 'string' || typeof externalUserId !== 'string' || !externalUserId) return null;
   const user = await db
     .prepare(
       `UPDATE users SET external_user_id = ?, status = 'ACTIVE'
-       WHERE email = ? AND status = 'PENDING' AND external_user_id IS NULL
+       WHERE email = ? AND status IN ('PENDING', 'ACTIVE') AND external_user_id IS NULL
        RETURNING id, organisation_id, role`,
     )
     .bind(externalUserId, email.trim())

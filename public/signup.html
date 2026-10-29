@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BizPartnerCheck – Create account</title>
+  <script src="/clerk.js"></script>
+</head>
+<body>
+  <!-- SCRUM-104: Clerk sign-up for people who already have a user here but no
+       Clerk account yet, e.g. the Super Admin from the setup script. New
+       organisations register on /register instead. -->
+  <h1 id="title"></h1>
+  <p id="intro"></p>
+  <div id="sign-up"></div>
+  <p id="message" role="alert"></p>
+
+  <script>
+    const texts = {
+      en: {
+        title: 'Create your account',
+        intro: 'Use the e-mail address your account was set up with. New organisations please register first.',
+        failed: 'The sign-up could not be loaded. Please try again later.',
+      },
+      de: {
+        title: 'Konto anlegen',
+        intro: 'Verwenden Sie die E-Mail-Adresse, mit der Ihr Konto angelegt wurde. Neue Organisationen registrieren sich bitte zuerst.',
+        failed: 'Die Registrierung konnte nicht geladen werden. Bitte versuchen Sie es später erneut.',
+      },
+    };
+    const lang = navigator.language.toLowerCase().startsWith('de') ? 'de' : 'en';
+    const t = texts[lang];
+    document.documentElement.lang = lang;
+    document.title = `BizPartnerCheck – ${t.title}`;
+    document.getElementById('title').textContent = t.title;
+    document.getElementById('intro').textContent = t.intro;
+
+    loadClerk()
+      .then((clerk) => {
+        if (clerk.isSignedIn) return location.replace('/app/');
+        clerk.mountSignUp(document.getElementById('sign-up'), { signInUrl: '/login', forceRedirectUrl: '/app/' });
+      })
+      .catch(() => { document.getElementById('message').textContent = t.failed; });
+  </script>
+</body>
+</html>
