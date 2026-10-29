@@ -61,17 +61,18 @@ SCRUM-12 (FR-ORG-01): a new organisation registers for free on `/register` with 
 
 ## Login (Clerk)
 
-SCRUM-104 (SI-06, CR-09): the team does not implement authentication itself. Sign-in, sign-up, e-mail verification (with a link) and password reset are handled by **Clerk**; the database holds no passwords (QS-SEC-02).
+SCRUM-104 (SI-06, CR-09): the team does not implement authentication itself. Sign-in, sign-up, e-mail verification (with a code) and password reset are handled by **Clerk**; the database holds no passwords (QS-SEC-02).
 
 **Why Clerk:** it runs with Cloudflare Workers (`@clerk/backend` verifies sessions in the Worker, the browser part loads from Clerk's CDN without a build step), its free plan is far more than enough for this project (50,000 monthly users), and it has ready-made sign-in and sign-up forms with e-mail verification and password reset. EU data location: not checked yet; see open points in the PR.
 
 How it fits together:
 
 - Pages: `/login` (Clerk sign-in), `/register` (organisation registration, then Clerk sign-up), `/signup` (Clerk sign-up for users that already exist here, e.g. the Super Admin), `/app/` (only for signed-in users).
-- The Worker checks the Clerk session on `/api/me` and on every page under `/app/`, and maps the Clerk user to our user, organisation and role (`src/auth.js`). Without a session `/app/` redirects to `/login`; `/api/me` answers 401, or 403 `NOT_REGISTERED` for a Clerk account that belongs to no user here.
+- The Worker checks the Clerk session on `/api/me` and on every page under `/app/`, and maps the Clerk user to our user, organisation and role (`src/auth.js`). Without a session `/app/` redirects to `/login` and `/api/me` answers 401. A Clerk account that belongs to no user here gets 403 `NOT_REGISTERED` on both (the page says so and offers logout).
 - First sign-in: when Clerk reports the user's primary e-mail address as verified, the user with that address is linked via `users.external_user_id` and set to `ACTIVE` (`linkExternalUser()` in `src/registration.js`). Deactivated users are never linked and lose access at once.
 - Keys: `CLERK_PUBLISHABLE_KEY` is public and set in `wrangler.toml`. `CLERK_SECRET_KEY` is a secret: `npx wrangler secret put CLERK_SECRET_KEY`, and locally in `.dev.vars` (see `.dev.vars.example`). Never commit it.
-- In the Clerk dashboard: sign-in with e-mail address and password only, e-mail verification by link.
+- In the Clerk dashboard: sign-in with e-mail address and password only; e-mail verification by **code** (a link opens a new tab and the sign-up was not finished there); user enumeration protection **Strict** (a failed login does not say whether the address exists, SCRUM-14); access mode **Open** (new organisations sign up after registering).
+- Secret keys are shown only once in the Clerk dashboard. Copying the masked key (`sk_test_B••••`) does not work; create a new key and copy it right away.
 
 ## BMF feed (FR-DOC-06)
 
