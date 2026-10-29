@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BizPartnerCheck</title>
+</head>
+<body>
+  <!-- SCRUM-14: first page after login. The Worker only serves /app/* to signed-in
+       users. The pages per role (check, list, users, tokens) come with SCRUM-32. -->
+  <h1>BizPartnerCheck</h1>
+  <p id="who"></p>
+  <button type="button" id="logout"></button>
+
+  <script>
+    const texts = {
+      en: {
+        who: (u, role) => `Logged in as ${u.firstName} ${u.lastName} (${role}).`,
+        logout: 'Log out',
+        roles: { SUPER_ADMIN: 'Super Admin', ADMIN: 'Organisation Admin', REQUEST_USER: 'Request User', REVIEW_USER: 'Review User' },
+      },
+      de: {
+        who: (u, role) => `Angemeldet als ${u.firstName} ${u.lastName} (${role}).`,
+        logout: 'Abmelden',
+        roles: { SUPER_ADMIN: 'Super-Admin', ADMIN: 'Organisations-Admin', REQUEST_USER: 'Anfrage-Benutzer', REVIEW_USER: 'Prüf-Benutzer' },
+      },
+    };
+    const lang = navigator.language.toLowerCase().startsWith('de') ? 'de' : 'en';
+    const t = texts[lang];
+    document.documentElement.lang = lang;
+    document.getElementById('logout').textContent = t.logout;
+
+    fetch('/api/me')
+      .then((response) => (response.ok ? response.json() : Promise.reject()))
+      .then(({ user }) => {
+        document.getElementById('who').textContent = t.who(user, t.roles[user.role] ?? user.role);
+      })
+      .catch(() => location.replace('/login'));
+
+    document.getElementById('logout').addEventListener('click', async () => {
+      await fetch('/api/logout', { method: 'POST' }).catch(() => null);
+      location.replace('/login');
+    });
+  </script>
+</body>
+</html>

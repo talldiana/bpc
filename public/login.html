@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BizPartnerCheck – Log in</title>
+</head>
+<body>
+  <!-- SCRUM-14: log in with e-mail and password; on success the app opens under /app/. -->
+  <h1 id="title"></h1>
+
+  <form id="login-form">
+    <label><span id="email-label"></span><br><input type="email" name="email" required autocomplete="username"></label><br>
+    <label><span id="password-label"></span><br><input type="password" name="password" required autocomplete="current-password"></label>
+    <p><button type="submit" id="login-button"></button></p>
+  </form>
+
+  <p id="message" role="alert"></p>
+  <p><a href="/reset-password.html" id="forgot-link"></a></p>
+
+  <script>
+    const texts = {
+      en: {
+        title: 'Log in',
+        email: 'E-mail address',
+        password: 'Password',
+        login: 'Log in',
+        forgot: 'Forgot password?',
+        invalid: 'E-mail address or password is wrong.',
+        failed: 'Something went wrong. Please try again.',
+      },
+      de: {
+        title: 'Anmelden',
+        email: 'E-Mail-Adresse',
+        password: 'Passwort',
+        login: 'Anmelden',
+        forgot: 'Passwort vergessen?',
+        invalid: 'E-Mail-Adresse oder Passwort ist falsch.',
+        failed: 'Etwas ist schiefgegangen. Bitte versuchen Sie es erneut.',
+      },
+    };
+    const lang = navigator.language.toLowerCase().startsWith('de') ? 'de' : 'en';
+    const t = texts[lang];
+    document.documentElement.lang = lang;
+    document.title = `BizPartnerCheck – ${t.title}`;
+    for (const [id, key] of [['title', 'title'], ['email-label', 'email'], ['password-label', 'password'],
+      ['login-button', 'login'], ['forgot-link', 'forgot']]) {
+      document.getElementById(id).textContent = t[key];
+    }
+
+    // Already logged in: go straight to the app.
+    fetch('/api/me').then((response) => { if (response.ok) location.replace('/app/'); });
+
+    const form = document.getElementById('login-form');
+    const message = document.getElementById('message');
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      message.textContent = '';
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: form.email.value, password: form.password.value }),
+      }).catch(() => null);
+      if (response?.ok) {
+        location.replace('/app/');
+      } else {
+        // One message for a wrong address and a wrong password (SCRUM-14).
+        message.textContent = response?.status === 401 ? t.invalid : t.failed;
+        form.password.value = '';
+      }
+    });
+  </script>
+</body>
+</html>

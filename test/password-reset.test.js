@@ -2,41 +2,12 @@
 // expires, the old password stops working and the reset is audited in UTC.
 
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { DatabaseSync } from 'node:sqlite';
 import { beforeEach, test } from 'node:test';
 import worker from '../src/index.js';
 import { hashPassword, verifyPassword } from '../src/password.js';
 import { confirmPasswordReset, requestPasswordReset } from '../src/password-reset.js';
-
-const migration = (name) => readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8');
-
-// Just enough of the D1 API (prepare/bind/first/run/batch) on top of node:sqlite.
-function d1(sqlite) {
-  const statement = (sql, params = []) => ({
-    bind: (...values) => statement(sql, values),
-    first: async () => sqlite.prepare(sql).get(...params) ?? null,
-    run: async () => statement(sql, params).execute(),
-    execute: () =>
-      /\bRETURNING\b/i.test(sql)
-        ? { results: sqlite.prepare(sql).all(...params) }
-        : (sqlite.prepare(sql).run(...params), { results: [] }),
-  });
-  return {
-    prepare: (sql) => statement(sql),
-    async batch(statements) {
-      sqlite.exec('BEGIN');
-      try {
-        const results = statements.map((s) => s.execute());
-        sqlite.exec('COMMIT');
-        return results;
-      } catch (error) {
-        sqlite.exec('ROLLBACK');
-        throw error;
-      }
-    },
-  };
-}
+import { login } from '../src/session.js';
+import { d1, migratedDatabase } from './d1.js';
 
 let sqlite;
 let db;
@@ -48,9 +19,7 @@ const passwordHash = (email) => sqlite.prepare('SELECT password_hash FROM users 
 const auditActions = () => sqlite.prepare('SELECT action, created_at FROM audit_log ORDER BY id').all();
 
 beforeEach(async () => {
-  sqlite = new DatabaseSync(':memory:');
-  sqlite.exec(migration('0001_initial_schema.sql'));
-  sqlite.exec(migration('0002_password_resets.sql'));
+  sqlite = migratedDatabase();
   sqlite.exec("INSERT INTO organisations (id, name, fn) VALUES (1, 'Bau GmbH', 'FN 123456a')");
   const addUser = sqlite.prepare(
     "INSERT INTO users (organisation_id, email, first_name, last_name, role, password_hash, status) VALUES (1, ?, 'A', 'B', 'REQUEST_USER', ?, ?)",
@@ -167,4 +136,12 @@ test('API: confirm answers 204 on success and 400 with an error code otherwise',
   assert.equal(bad.status, 400);
   assert.deepEqual(await bad.json(), { error: 'INVALID_LINK' });
   assert.equal((await confirm({ token: tokenIn(mails[0]), password: 'brand-new-password' })).status, 204);
+});
+
+test('a reset logs the user out everywhere', async () => {
+  const session = await login({ db, now }, 'ana@example.com', 'old-password-123');
+  assert.ok(session.ok);
+  await requestPasswordReset(deps(), 'ana@example.com', 'en');
+  await confirmPasswordReset(deps(), tokenIn(mails[0]), 'brand-new-password');
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM sessions').get().n, 0);
 });

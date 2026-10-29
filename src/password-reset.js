@@ -10,6 +10,7 @@
 //    writes an audit entry with a UTC timestamp (QS-OBS-01).
 
 import { hashPassword } from './password.js';
+import { randomToken, sha256Hex } from './tokens.js';
 
 export const LINK_MINUTES = 30;
 export const MAX_LINKS_PER_HOUR = 3;
@@ -17,16 +18,6 @@ const MIN_PASSWORD_LENGTH = 12; // same rule as the Super Admin password (setup-
 const MAX_PASSWORD_LENGTH = 128;
 
 const minutesFrom = (date, minutes) => new Date(date.getTime() + minutes * 60_000).toISOString();
-
-async function sha256Hex(text) {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
-}
-
-function randomToken() {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  return btoa(String.fromCharCode(...bytes)).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
-}
 
 export function languageOf(request) {
   return (request.headers.get('Accept-Language') ?? '').toLowerCase().startsWith('de') ? 'de' : 'en';
@@ -110,14 +101,15 @@ export async function confirmPasswordReset({ db, now = new Date() }, token, pass
 
   // A D1 batch is one transaction, so two clicks on the same link cannot both
   // succeed. The link is marked used last, after the statements that look it up.
-  const [, , redeemed] = await db.batch([
+  const [, , , redeemed] = await db.batch([
     db
       .prepare(`INSERT INTO audit_log (created_at, user_id, action, details) SELECT ?, user_id, 'PASSWORD_RESET_COMPLETED', '{}' FROM (${validLink})`)
       .bind(at, tokenHash, at),
     db
       .prepare(`UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = (${validLink})`)
       .bind(passwordHash, tokenHash, at),
-    // TODO(SCRUM-14): once login stores sessions, also end all sessions of this user here.
+    // Log the user out everywhere, so a session started with the old password ends too.
+    db.prepare(`DELETE FROM sessions WHERE user_id = (${validLink})`).bind(tokenHash, at),
     db
       .prepare(
         `UPDATE password_resets SET used_at = ?

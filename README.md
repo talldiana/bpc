@@ -51,6 +51,16 @@ First deployment on a new Cloudflare account:
 2. `SUPER_ADMIN_EMAIL=... npm run setup -- --remote` to create the schema and the Super Admin.
 3. `npm run deploy`. Wrangler creates the custom domain and its TLS certificate. The zone (`hsynrsd.dev`) must be on the same Cloudflare account.
 
+## Login
+
+SCRUM-14: users log in on `/login` with e-mail and password and land on `/app/`.
+
+- `POST /api/login` `{ "email", "password" }` answers 200 with the user and sets the `bpc_session` cookie (HttpOnly, Secure, SameSite=Strict, 8 hours), or 401 `INVALID_CREDENTIALS`. The answer is the same for an unknown address and a wrong password. Only ACTIVE users can log in.
+- `POST /api/logout` ends the session. `GET /api/me` returns the signed-in user, or 401.
+- Every page under `/app/` needs a session; without one the Worker redirects to `/login`. Put pages for signed-in users there.
+- Sessions are stored in the `sessions` table (only token hashes). A password reset ends all sessions of that user.
+- Locally: `npm run setup` creates the Super Admin, then `npm run dev` and log in with that account.
+
 ## Password reset
 
 SCRUM-15: users who forgot their password open `/reset-password.html`, enter their e-mail address and get a link that works once for 30 minutes.
