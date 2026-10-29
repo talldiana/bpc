@@ -99,6 +99,19 @@
       }
     };
 
+    // The link in Clerk's verification e-mail comes back to this page with
+    // __clerk_status in the URL. Let Clerk finish the sign-up, then go to the app.
+    if (new URLSearchParams(location.search).has('__clerk_status')) {
+      form.hidden = true;
+      loadClerk()
+        .then((clerk) => clerk.handleEmailLinkVerification({
+          redirectUrlComplete: '/app/',
+          redirectUrl: '/app/',
+          onVerifiedOnOtherDevice: () => location.replace('/login'),
+        }))
+        .catch(() => { message.textContent = t.failed; });
+    }
+
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
       message.textContent = '';

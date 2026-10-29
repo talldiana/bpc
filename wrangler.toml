@@ -19,6 +19,13 @@ run_worker_first = ["/api/*", "/app", "/app/*"]
 [vars]
 CLERK_PUBLISHABLE_KEY = "pk_test_bW9yYWwtZmlzaC03ODYzLmNsZXJrLmFjY291bnRzLmRldiQ"
 
+# Local `npm run dev`: keep request URLs on localhost. Without this, wrangler
+# rewrites them to the custom domain above, so Clerk rejects the localhost
+# session and redirects point to the live site.
+[dev]
+port = 8787
+host = "localhost:8787"
+
 [observability]
 enabled = true
 

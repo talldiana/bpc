@@ -6,13 +6,18 @@
 //   SUPER_ADMIN_EMAIL=ops@example.com npm run setup -- --remote # Cloudflare D1
 
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { SELECT_SUPER_ADMIN_SQL, insertSuperAdminSql, validateEmail } from './setup-lib.js';
 
 const DATABASE = process.env.D1_DATABASE ?? 'bpc';
 const target = process.argv.includes('--remote') ? '--remote' : '--local';
 
+// Runs the project's own wrangler with node directly. Calling 'npx' fails on
+// Windows, where it is npx.cmd and cannot be started without a shell.
+const WRANGLER = fileURLToPath(new URL('../node_modules/wrangler/bin/wrangler.js', import.meta.url));
+
 function wrangler(...args) {
-  return execFileSync('npx', ['wrangler', ...args], {
+  return execFileSync(process.execPath, [WRANGLER, ...args], {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'inherit'],
     env: { ...process.env, CI: 'true' }, // no interactive confirmation prompts
