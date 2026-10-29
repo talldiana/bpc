@@ -56,9 +56,12 @@ async function me(request, env) {
 async function appPage(request, env) {
   const result = await currentUser({ db: env.DB, identity: identityOf(env) }, request);
   if (result.handshake) return new Response(null, { status: 307, headers: result.handshake });
-  if (!result.user) return Response.redirect(new URL('/login', request.url), 302);
-  const page = await env.ASSETS.fetch(request);
-  const response = new Response(page.body, page);
+  if (result.error === 'NOT_SIGNED_IN') return Response.redirect(new URL('/login', request.url), 302);
+  // Signed in to Clerk but not a user here: show the start page, which says so and
+  // offers logout. Redirecting to /login would loop, because /login sends anyone
+  // with a Clerk session back to /app/.
+  const page = await env.ASSETS.fetch(result.user ? request : new Request(new URL('/app/', request.url), request));
+  const response = new Response(page.body, { status: result.user ? page.status : 403, headers: page.headers });
   response.headers.set('Cache-Control', 'no-store');
   return response;
 }

@@ -78,7 +78,19 @@ test('an address that Clerk has not verified yet does not activate the admin', a
 test('a Clerk account whose address is not registered here gets no access', async () => {
   verifiedEmails.user_stranger = 'stranger@example.com';
   assert.equal((await get('/api/me', 'user_stranger')).status, 403);
-  assert.equal((await get('/app/', 'user_stranger')).status, 302);
+  const page = await get('/app/', 'user_stranger');
+  assert.equal(page.status, 403);
+  assert.equal(page.headers.get('Cache-Control'), 'no-store');
+});
+
+test('signed in to Clerk but not registered: /app/ shows the start page with its message, no redirect to /login', async () => {
+  // /login sends anyone with a Clerk session to /app/, so a redirect back would loop.
+  for (const path of ['/app/', '/app/users']) {
+    const page = await get(path, 'user_ana'); // address not verified yet
+    assert.equal(page.status, 403, path);
+    assert.equal(page.headers.get('Location'), null, path);
+    assert.equal(await page.text(), 'page /app/', path);
+  }
 });
 
 test('a signed-in user gets /app/ pages, and they are not cached', async () => {
@@ -94,7 +106,7 @@ test('a deactivated user is locked out even with a valid Clerk session', async (
   await get('/api/me', 'user_ana');
   sqlite.exec("UPDATE users SET status = 'DEACTIVATED' WHERE email = 'ana@bau.example'");
   assert.equal((await get('/api/me', 'user_ana')).status, 403);
-  assert.equal((await get('/app/', 'user_ana')).status, 302);
+  assert.equal((await get('/app/', 'user_ana')).status, 403);
 });
 
 test('a second Clerk account with the same address cannot take over the user', async () => {
