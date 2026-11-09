@@ -74,6 +74,22 @@ How it fits together:
 - In the Clerk dashboard: sign-in with e-mail address and password only; e-mail verification by **code** (a link opens a new tab and the sign-up was not finished there); user enumeration protection **Strict** (a failed login does not say whether the address exists, SCRUM-14); access mode **Open** (new organisations sign up after registering).
 - Secret keys are shown only once in the Clerk dashboard. Copying the masked key (`sk_test_B••••`) does not work; create a new key and copy it right away.
 
+## API tokens
+
+SCRUM-58 (FR-API-03): programs call the API with an API token that belongs to exactly one user.
+
+```sh
+curl -X POST https://bpc.hsynrsd.dev/api/requests \
+  -H "Authorization: Bearer bpc_..." -H "Content-Type: application/json" \
+  -d '{"vat":"ATU12345678"}'
+```
+
+- A request with an `Authorization` header is judged by its token only, never by a Clerk cookie. Without the header, the web app's Clerk session is used as before.
+- No token and no session: 401 `NOT_SIGNED_IN`. An unknown, revoked or expired token, or one whose user is deactivated: 401 `INVALID_TOKEN` (the same answer for each, so nobody can probe which tokens exist).
+- A token user has the same role rules as in the web app, e.g. a Review User's token gets 403 on `POST /api/requests`.
+- A request started with a token stores the token's user and `api_token_id` in `requests` and `audit_log` (FR-DOC-01). `last_used_at` is updated on each call.
+- `api_tokens` keeps only the SHA-256 hash of a token (`src/api-token.js`). Creating tokens in the web app is SCRUM-59.
+
 ## BMF feed (FR-DOC-06)
 
 Once a day at 04:17 UTC (05:17 Vienna time in winter) a Cron Trigger runs the Worker's `scheduled` handler, which fetches the BMF fake company feed (SCRUM-18, `src/bmf-feed.js`).

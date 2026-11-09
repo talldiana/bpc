@@ -2,6 +2,7 @@
 // static assets from public/; requests to /api/* run this code first, so the
 // web app and the API share one domain.
 
+import { bearerToken, tokenUser } from './api-token.js';
 import { clerkIdentity, currentUser } from './auth.js';
 import { refreshBmfFeed } from './bmf-feed.js';
 import { startCheck } from './check-request.js';
@@ -45,11 +46,31 @@ function config(env) {
 // Tests pass env.IDENTITY instead of talking to Clerk.
 const identityOf = (env) => env.IDENTITY ?? clerkIdentity(env);
 
-async function me(request, env) {
+// Who is calling the API? A program sends an API token (SCRUM-58, FR-API-03);
+// the web app sends the Clerk session cookie instead. A request with an
+// Authorization header is always judged by its token, never by a cookie.
+// Returns { user, apiTokenId } or { status, error } for the error response.
+async function apiCaller(request, env) {
+  if (bearerToken(request) !== null) {
+    const result = await tokenUser({ db: env.DB }, request);
+    return result.user ? result : { status: 401, error: result.error };
+  }
   const result = await currentUser({ db: env.DB, identity: identityOf(env) }, request);
-  if (result.user) return json({ user: result.user });
+  if (result.user) return { user: result.user, apiTokenId: null };
   // 401: not signed in. 403: signed in at Clerk, but not a BizPartnerCheck user.
-  return json({ error: result.error ?? 'NOT_SIGNED_IN' }, result.error === 'NOT_REGISTERED' ? 403 : 401);
+  const error = result.error ?? 'NOT_SIGNED_IN';
+  return { status: error === 'NOT_REGISTERED' ? 403 : 401, error };
+}
+
+function unauthorized({ status, error }) {
+  const response = json({ error }, status);
+  if (status === 401) response.headers.set('WWW-Authenticate', 'Bearer');
+  return response;
+}
+
+async function me(request, env) {
+  const caller = await apiCaller(request, env);
+  return caller.user ? json({ user: caller.user }) : unauthorized(caller);
 }
 
 // Pages under /app/ are only for signed-in users; everyone else is sent to the
@@ -69,15 +90,13 @@ async function appPage(request, env) {
 
 // SCRUM-16: POST /api/requests { vat, fn } -> 202 { requestId }
 async function startCheckRoute(request, env) {
-  // Same sign-in check as /api/me.
-  const signedIn = await currentUser({ db: env.DB, identity: identityOf(env) }, request);
-  if (!signedIn.user) {
-    return json({ error: signedIn.error ?? 'NOT_SIGNED_IN' }, signedIn.error === 'NOT_REGISTERED' ? 403 : 401);
-  }
+  // Same check as /api/me: API token or Clerk session.
+  const caller = await apiCaller(request, env);
+  if (!caller.user) return unauthorized(caller);
 
   const body = (await readJson(request)) ?? {};
   const { vat, fn } = body;
-  const result = await startCheck({ db: env.DB }, signedIn.user, { vat, fn });
+  const result = await startCheck({ db: env.DB, apiTokenId: caller.apiTokenId }, caller.user, { vat, fn });
 
   if (result.ok) return json({ requestId: result.requestId }, 202);
   return json({ error: result.error }, result.error === 'FORBIDDEN' ? 403 : 400);

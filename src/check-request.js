@@ -57,17 +57,19 @@ export function validateFn(input) {
 // Review Users may not; the Super Admin is outside every organisation.
 const ROLES_THAT_MAY_START = ['REQUEST_USER', 'ADMIN'];
 
-const auditSql = 'INSERT INTO audit_log (created_at, user_id, action, details) VALUES (?, ?, ?, ?)';
+const auditSql = 'INSERT INTO audit_log (created_at, user_id, api_token_id, action, details) VALUES (?, ?, ?, ?, ?)';
 
 /**
  * Starts a check request for the given user.
  * user: the signed-in user from currentUser() in auth.js ({ id, organisationId, role, ... }).
  * input: { vat, fn } exactly as typed.
+ * apiTokenId: the API token the request came with (SCRUM-58), or null when it
+ * was started in the web app. It is stored with the request and in the audit log.
  *
  * Returns { ok: true, requestId } or { ok: false, error } with error
  * FORBIDDEN, INVALID_VAT or INVALID_FN. No source is queried here.
  */
-export async function startCheck({ db, now = new Date() }, user, input) {
+export async function startCheck({ db, now = new Date(), apiTokenId = null }, user, input) {
   const at = now.toISOString();
 
   // 1. Who is asking? Review Users (and the Super Admin) get FORBIDDEN.
@@ -85,7 +87,7 @@ export async function startCheck({ db, now = new Date() }, user, input) {
     // Only the error code is stored, not what was typed.
     await db
       .prepare(auditSql)
-      .bind(at, user.id, 'REQUEST_REJECTED', JSON.stringify({ error }))
+      .bind(at, user.id, apiTokenId, 'REQUEST_REJECTED', JSON.stringify({ error }))
       .run();
     return { ok: false, error };
   }
@@ -93,17 +95,17 @@ export async function startCheck({ db, now = new Date() }, user, input) {
   // 3. Store the request. RETURNING id gives back the new row's ID.
   const row = await db
     .prepare(
-      `INSERT INTO requests (organisation_id, user_id, input_vat, input_fn, status, started_at)
-       VALUES (?, ?, ?, ?, 'RUNNING', ?)
+      `INSERT INTO requests (organisation_id, user_id, api_token_id, input_vat, input_fn, status, started_at)
+       VALUES (?, ?, ?, ?, ?, 'RUNNING', ?)
        RETURNING id`,
     )
-    .bind(user.organisationId, user.id, vat.vat, fn.fn, at)
+    .bind(user.organisationId, user.id, apiTokenId, vat.vat, fn.fn, at)
     .first();
 
   // 4. Log that a request was started (FR-LOG-03).
   await db
     .prepare(auditSql)
-    .bind(at, user.id, 'REQUEST_STARTED', JSON.stringify({ requestId: row.id }))
+    .bind(at, user.id, apiTokenId, 'REQUEST_STARTED', JSON.stringify({ requestId: row.id }))
     .run();
 
   return { ok: true, requestId: row.id };
