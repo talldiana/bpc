@@ -4,15 +4,68 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>BizPartnerCheck</title>
+  <style>
+    .buttons { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+    .buttons a { padding: 0.6rem 1.2rem; border: 1px solid #1a4d8f; border-radius: 6px; text-decoration: none; font: inherit; }
+    #register { background: #1a4d8f; color: #fff; }
+    #login { background: #fff; color: #1a4d8f; }
+  </style>
 </head>
 <body>
+  <!-- SCRUM-30 (UI-01): start page with a Register and a Login button. It needs no
+       sign-in. Register opens the organisation registration (FR-ORG-01); Login opens
+       the Clerk sign-in, which sends a signed-in user on to /app/ (UI-05). -->
   <h1>BizPartnerCheck</h1>
-  <p>API status: <span id="status">checking…</span></p>
+  <p id="intro"></p>
+
+  <p class="buttons">
+    <a href="/register" id="register" role="button"></a>
+    <a href="/login" id="login" role="button"></a>
+  </p>
+  <!-- Shown in addition when this browser is already signed in. -->
+  <p id="signed-in" hidden><a href="/app/" id="open-app"></a></p>
+
+  <footer><small><span id="status-label"></span> <span id="status">…</span></small></footer>
+
   <script>
+    const texts = {
+      en: {
+        intro: 'Check business partners against official EU and Austrian sources.',
+        register: 'Register your organisation',
+        login: 'Log in',
+        openApp: (u) => `You are logged in as ${u.firstName} ${u.lastName}. Open BizPartnerCheck`,
+        status: 'Service status:',
+        unreachable: 'unreachable',
+      },
+      de: {
+        intro: 'Geschäftspartner mit amtlichen Quellen der EU und Österreichs prüfen.',
+        register: 'Organisation registrieren',
+        login: 'Anmelden',
+        openApp: (u) => `Sie sind angemeldet als ${u.firstName} ${u.lastName}. BizPartnerCheck öffnen`,
+        status: 'Dienststatus:',
+        unreachable: 'nicht erreichbar',
+      },
+    };
+    const lang = navigator.language.toLowerCase().startsWith('de') ? 'de' : 'en';
+    const t = texts[lang];
+    document.documentElement.lang = lang;
+    for (const id of ['intro', 'register', 'login']) document.getElementById(id).textContent = t[id];
+    document.getElementById('status-label').textContent = t.status;
+
+    // Already signed in? Then offer a direct way to the pages of the user's role.
+    fetch('/api/me')
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body) => {
+        if (!body?.user) return;
+        document.getElementById('open-app').textContent = t.openApp(body.user);
+        document.getElementById('signed-in').hidden = false;
+      })
+      .catch(() => {});
+
     fetch('/api/health')
       .then((response) => response.json())
       .then((body) => { document.getElementById('status').textContent = body.status; })
-      .catch(() => { document.getElementById('status').textContent = 'unreachable'; });
+      .catch(() => { document.getElementById('status').textContent = t.unreachable; });
   </script>
 </body>
 </html>
